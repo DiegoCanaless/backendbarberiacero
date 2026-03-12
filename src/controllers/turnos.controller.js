@@ -10,9 +10,19 @@ export const getTurnosByBarber = async (req, res) => {
 
   try {
     const [rows] = await pool.query(
-      `SELECT * FROM turnos 
-       WHERE barberID = ?
-       ORDER BY fecha, horario`,
+      `SELECT 
+        t.id_turno,
+        t.fecha,
+        t.horario,
+        t.horaFin,
+        t.estado,
+        s.nombre AS servicio,
+        u.name AS cliente
+      FROM turnos t
+      JOIN servicios s ON t.servicioID = s.id_servicio
+      JOIN usuario u ON t.clienteID = u.id_cliente
+      WHERE t.barberID = ?
+      ORDER BY t.fecha, t.horario`,
       [barberID]
     );
 
@@ -32,18 +42,31 @@ export const getTurnosByUser = async (req, res) => {
 
   try {
     const [rows] = await pool.query(
-      `SELECT * FROM turnos 
-       WHERE clienteID = ?
-       ORDER BY fecha, horario`,
+      `SELECT 
+        t.id_turno,
+        t.fecha,
+        t.horario,
+        t.horaFin,
+        t.estado,
+        s.nombre AS servicio,
+        u.name AS barbero
+      FROM turnos t
+      JOIN servicios s ON t.servicioID = s.id_servicio
+      JOIN usuario u ON t.barberID = u.id_cliente
+      WHERE t.clienteID = ?
+      ORDER BY t.fecha DESC, t.horario DESC`,
       [clienteID]
     );
 
     res.json(rows);
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Error al traer turnos" });
   }
 };
+
+
 
 /* ============================= */
 /*         CREAR TURNO          */
@@ -67,7 +90,8 @@ export const crearTurno = async (req, res) => {
     const [servicio] = await pool.query(
       `SELECT duracion 
        FROM servicios 
-       WHERE id_servicio = ?`,
+       WHERE id_servicio = ?
+       AND estado = 'activo'`,
       [servicioID]
     );
 
@@ -77,6 +101,16 @@ export const crearTurno = async (req, res) => {
       });
     }
 
+    const ahora = new Date();
+    const fechaTurno = new Date(`${fecha}T${horarioDB}`);
+
+    if (fechaTurno < ahora) {
+      return res.status(400).json({
+        message: "No se puede reservar en el pasado"
+      });
+    }
+
+
     const duracion = servicio[0].duracion;
 
     // 2️⃣ Verificar que el barbero haga ese servicio
@@ -84,7 +118,8 @@ export const crearTurno = async (req, res) => {
       `SELECT 1
        FROM barbero_servicios
        WHERE barberID = ?
-       AND servicioID = ?`,
+       AND servicioID = ?
+       AND estado = 'activo'`,
       [barberID, servicioID]
     );
 

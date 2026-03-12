@@ -12,7 +12,7 @@ export const login = async (req, res) => {
         }
 
         const [rows] = await pool.query(
-            "SELECT id_cliente, name, password, email, role FROM usuario WHERE email = ?",
+            "SELECT id_cliente, name, apellido, password, email, telefono, role, estado FROM usuario WHERE email = ?",
             [email]
         );
 
@@ -23,6 +23,11 @@ export const login = async (req, res) => {
         const user = rows[0]
         const passwordMatch = await bcrypt.compare(password, user.password);
 
+        if (user.estado === "oculto") {
+            return res.status(403).json({ message: "Usuario bloqueado" })
+        }
+
+
         if (!passwordMatch) {
             return res.status(401).json({ message: "Credenciales son invalidas" })
         }
@@ -32,7 +37,9 @@ export const login = async (req, res) => {
                 id: user.id_cliente,
                 role: user.role,
                 name: user.name,
-                email: user.email
+                apellido: user.apellido,
+                email: user.email,
+                telefono: user.telefono
             },
             process.env.JWT_SECRET,
             { expiresIn: "1d" }
@@ -41,8 +48,10 @@ export const login = async (req, res) => {
         const userInfo = {
             id_cliente: user.id_cliente,
             name: user.name,
+            apellido: user.apellido,
             email: user.email,
-            role: user.role
+            role: user.role,
+            telefono: user.telefono
         }
 
         res.cookie("token", token, {
@@ -110,15 +119,30 @@ export const logout = (req, res) => {
         .json({ message: "Logout exitoso" })
 }
 
-export const me = (req, res) => {
-    const token = req.cookies.token;
-
-    if (!token) {
-        return res.status(401).json({ message: "No autenticado" })
-    }
-
+export const me = async (req, res) => {
     try {
+        const token = req.cookies.token;
+
+        if (!token) {
+            return res.status(401).json({ message: "No autenticado" })
+        }
+
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+        const [rows] = await pool.query(
+            "SELECT id_cliente, name, email, role, estado FROM usuario WHERE id_cliente = ?",
+            [decoded.id]
+        )
+
+        if(rows.length === 0){
+            return res.status(401).json({ message: "Usuario no encontrado"})
+        }
+
+        const user = rows[0]
+
+        if(user.estado === "oculto"){
+            return res.status(403).json({message: "Usuario bloqueado"})
+        }
 
 
         res.json({
@@ -130,5 +154,31 @@ export const me = (req, res) => {
 
     } catch {
         return res.status(401).json({ message: "Token Invalido" })
+    }
+}
+
+export const changeStatus = async (req, res) => {
+    try {
+        const { id } = req.params
+        const { estado } = req.body
+
+
+        if (!["activo", "oculto"].includes(estado)) {
+            return res.status(400).json({ message: "Estado inválido" })
+        }
+
+        const [result] = await pool.query(
+            "UPDATE usuario SET estado = ? WHERE id_cliente = ?",
+            [estado, id]
+        )
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: "Usuario no encontrado" })
+        }
+
+        res.json({ message: "Estado actualizado" })
+
+    } catch (error) {
+        res.status(500).json({ message: "Error al actualizar el estado" })
     }
 }

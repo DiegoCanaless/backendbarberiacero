@@ -9,10 +9,17 @@ export const crearHorario = async (req, res) => {
         return res.status(400).json({ message: "Datos Incompletos " })
     }
 
+    if (horaInicio >= horaFin) {
+        return res.status(400).json({
+            message: "La hora de inicio debe ser menor que la hora de fin"
+        });
+    }
+
+
 
     try {
         await pool.query(
-            `INSERT INTO horarioTrabajo (barberID, dia, horaInicio, horaFin, activo)
+            `INSERT INTO horariotrabajo (barberID, dia, horaInicio, horaFin, activo)
             VALUES (?, ?, ?, ?, ?)`,
             [barberID, dia, horaInicio, horaFin, true]
         )
@@ -67,14 +74,14 @@ export const desactivarHorario = async (req, res) => {
             [id, barberID]
         );
 
-        if(result.affectedRows === 0){
-            return res.status(404).json({ message: "Horario no encontrado o ya desactivado"})
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: "Horario no encontrado o ya desactivado" })
         }
 
-        res.json({ message: "Horario desactivado correctamente"})
-        
+        res.json({ message: "Horario desactivado correctamente" })
+
     } catch (error) {
         console.error(error)
-        return res.status(500).json({ message: "Error al desactivar el horario"})
+        return res.status(500).json({ message: "Error al desactivar el horario" })
     }
 }

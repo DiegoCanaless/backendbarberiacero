@@ -45,7 +45,7 @@ export const createBarber = async (req, res) => {
 export const getUsers = async (req, res) => {
     try {
         const [users] = await pool.query(
-            "SELECT id_cliente, name, apellido, email, telefono, role FROM usuario"
+            "SELECT id_cliente, name, apellido, email, telefono, role FROM usuario WHERE estado = 'activo'"
         );
 
         res.json(users)
@@ -116,7 +116,7 @@ export const deleteUser = async (req, res) => {
         const { id } = req.params
 
         const [result] = await pool.query(
-            "DELETE FROM usuario WHERE id_cliente = ?",
+            "UPDATE usuario SET estado = 'oculto' WHERE id_cliente = ?",
             [id]
         )
 

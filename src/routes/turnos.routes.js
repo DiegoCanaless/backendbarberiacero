@@ -8,8 +8,9 @@ import { verifyRole } from "../middlewares/verifyRole.js";
 const router = Router();
 
 //GET
+// router.get("/allTurnos", verifyToken, verifyRole(["admin"], getAllTurnos))
 router.get("/barbero/:id",verifyToken, verifyRole(["barber"]), getTurnosByBarber)
-router.get("/usuario/:id",verifyToken, verifyRole(["usuario"]), getTurnosByUser)
+router.get("/usuario",verifyToken, verifyRole(["usuario"]), getTurnosByUser)
 router.get("/horarios-disponibles", verifyToken, horariosDisponibles)
 
 // POST

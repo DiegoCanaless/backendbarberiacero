@@ -10,6 +10,7 @@ CREATE TABLE usuario(
     telefono VARCHAR(20) NOT NULL,
     password VARCHAR(255) NOT NULL,
     role ENUM("admin", "usuario", "barber") NOT NULL,
+    estado ENUM("activo", "oculto") DEFAULT "activo",
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -18,6 +19,7 @@ CREATE TABLE servicios (
     nombre VARCHAR(100) NOT NULL,
     precio DECIMAL(10,2) NOT NULL,
     duracion INT NOT NULL,
+    estado ENUM("activo", "oculto") DEFAULT "activo",
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -25,6 +27,8 @@ CREATE TABLE barbero_servicios (
     id INT PRIMARY KEY AUTO_INCREMENT,
     barberID INT NOT NULL,
     servicioID INT NOT NULL,
+    estado ENUM("activo", "oculto") DEFAULT "activo",
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
     FOREIGN KEY (barberID) REFERENCES usuario(id_cliente),
     FOREIGN KEY (servicioID) REFERENCES servicios(id_servicio),
