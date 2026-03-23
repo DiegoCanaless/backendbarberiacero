@@ -7,31 +7,87 @@ import { generarHorarios } from "../utils/generarHorarios.js";
 
 export const getTurnosByBarber = async (req, res) => {
   const barberID = req.user.id;
+  const { estado } = req.query;
+
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const offset = (page - 1) * limit;
+
+  let filtroEstado = "";
+  let usarPaginacion = false;
+
+  if (estado === "activo") {
+    filtroEstado = `AND t.estado NOT IN ('Cancelado', 'Finalizado')`;
+  }
+
+  if (estado === "historial") {
+    filtroEstado = `AND t.estado IN ('Cancelado', 'Finalizado')`;
+    usarPaginacion = true;
+  }
 
   try {
-    const [rows] = await pool.query(
-      `SELECT 
+    // 🔹 QUERY PRINCIPAL
+    const queryBase = `
+      SELECT 
         t.id_turno,
         t.fecha,
         t.horario,
         t.horaFin,
         t.estado,
         s.nombre AS servicio,
-        u.name AS cliente
+        JSON_OBJECT(
+          'id_cliente', u.id_cliente,
+          'name', u.name,
+          'apellido', u.apellido
+        ) AS cliente
       FROM turnos t
       JOIN servicios s ON t.servicioID = s.id_servicio
       JOIN usuario u ON t.clienteID = u.id_cliente
       WHERE t.barberID = ?
-      ORDER BY t.fecha, t.horario`,
-      [barberID]
-    );
+      ${filtroEstado}
+      ORDER BY t.fecha DESC, t.horario DESC
+    `;
+
+    // 👉 Si es historial → paginar
+    if (usarPaginacion) {
+      const [rows] = await pool.query(
+        `${queryBase} LIMIT ? OFFSET ?`,
+        [barberID, limit, offset]
+      );
+
+      const [[count]] = await pool.query(
+        `SELECT COUNT(*) as total
+         FROM turnos t
+         WHERE t.barberID = ?
+         ${filtroEstado}`,
+        [barberID]
+      );
+
+      const total = count.total;
+      const totalPages = Math.ceil(total / limit);
+
+      return res.json({
+        data: rows,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages
+        }
+      });
+    }
+
+    // 👉 Si es activos → sin paginación
+    const [rows] = await pool.query(queryBase, [barberID]);
 
     res.json(rows);
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Error al traer turnos" });
   }
 };
+
 
 /* ============================= */
 /*      GET TURNOS USUARIO      */
@@ -49,12 +105,19 @@ export const getTurnosByUser = async (req, res) => {
         t.horaFin,
         t.estado,
         s.nombre AS servicio,
-        u.name AS barbero
+
+        JSON_OBJECT(
+          'id_cliente', b.id_cliente,
+          'name', b.name,
+          'apellido', b.apellido
+        ) AS barbero
+
       FROM turnos t
       JOIN servicios s ON t.servicioID = s.id_servicio
-      JOIN usuario u ON t.barberID = u.id_cliente
+      JOIN usuario b ON t.barberID = b.id_cliente
       WHERE t.clienteID = ?
-      ORDER BY t.fecha DESC, t.horario DESC`,
+      ORDER BY t.fecha DESC, t.horario DESC
+      `,
       [clienteID]
     );
 
@@ -406,3 +469,112 @@ export const horariosDisponibles = async (req, res) => {
     });
   }
 };
+
+
+export const getTurnosActivos = async (req, res) => {
+  try {
+
+    const [turnos] = await pool.query(`
+      SELECT 
+        t.id_turno,
+        t.fecha,
+        t.horario,
+        t.estado,
+        s.nombre AS servicio,
+        
+        JSON_OBJECT(
+          'id_cliente', u.id_cliente,
+          'name', u.name,
+          'apellido', u.apellido
+        ) AS cliente,
+
+        JSON_OBJECT(
+          'id_cliente', b.id_cliente,
+          'name', b.name,
+          'apellido', b.apellido
+        ) AS barbero
+
+
+
+      FROM turnos t
+      JOIN servicios s ON t.servicioID = s.id_servicio
+      JOIN usuario u ON t.clienteID = u.id_cliente
+      JOIN usuario b ON t.barberID = b.id_cliente
+      WHERE t.estado NOT IN ('Cancelado', 'Finalizado')
+      ORDER BY t.fecha DESC, t.horario DESC
+    `)
+
+    res.json(turnos)
+
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({ message: "Error al traer turnos" })
+  }
+}
+
+
+export const getHistorialTurnos = async (req, res) => {
+  try {
+
+    const page = parseInt(req.query.page) || 1
+    const limit = parseInt(req.query.limit) || 15
+
+    const offset = (page - 1) * limit
+
+    const [turnos] = await pool.query(`
+      SELECT 
+        t.id_turno,
+        t.fecha,
+        t.horario,
+        t.estado,
+        s.nombre AS servicio,
+
+        JSON_OBJECT(
+          'id_cliente', u.id_cliente,
+          'name', u.name,
+          'apellido', u.apellido
+        ) AS cliente,
+
+        JSON_OBJECT(
+          'id_cliente', b.id_cliente,
+          'name', b.name,
+          'apellido', b.apellido
+        ) AS barbero
+
+        FROM turnos t
+        JOIN servicios s ON t.servicioID = s.id_servicio
+        JOIN usuario u ON t.clienteID = u.id_cliente
+        JOIN usuario b ON t.barberID = b.id_cliente
+        WHERE t.estado IN ('Finalizado', 'Cancelado')
+        ORDER BY t.fecha DESC, t.horario DESC
+        LIMIT ? OFFSET ?`,
+      [limit, offset])
+
+    const [[count]] = await pool.query(
+      `
+        SELECT COUNT(*) as total
+        FROM turnos
+        WHERE estado IN ('Finalizado', 'Cancelado')
+        `
+    )
+
+    const total = count.total
+
+    const totalPages = Math.ceil(total / limit)
+
+    res.json({
+      data: turnos,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages
+      }
+
+    })
+
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({ message: "Error al traer el historial de turnos" })
+  }
+}

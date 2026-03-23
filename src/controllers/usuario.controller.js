@@ -9,8 +9,8 @@ export const createBarber = async (req, res) => {
     try {
         const { name, apellido, email, password, telefono } = req.body
 
-        if(!name || !apellido || !email || !password || !telefono){
-            return res.status(400).json({ message: "Todos los campos tienen que estar llenos"})
+        if (!name || !apellido || !email || !password || !telefono) {
+            return res.status(400).json({ message: "Todos los campos tienen que estar llenos" })
         }
 
         const [exist] = await pool.query(
@@ -18,7 +18,7 @@ export const createBarber = async (req, res) => {
             [email]
         )
 
-        if(exist.length> 0){
+        if (exist.length > 0) {
             return res.status(409).json({ message: "El correo ya esta registrado" })
         }
 
@@ -40,15 +40,54 @@ export const createBarber = async (req, res) => {
     }
 }
 
+
+
+
 // GET
 
 export const getUsers = async (req, res) => {
     try {
+        const page = parseInt(req.query.page) || 1
+        const limit = parseInt(req.query.limit) || 15
+        const search = (req.query.search || "").toString()
+
+        const offset = (page - 1) * limit
+
         const [users] = await pool.query(
-            "SELECT id_cliente, name, apellido, email, telefono, role FROM usuario WHERE estado = 'activo'"
+            `SELECT id_cliente, name, apellido, email, telefono, role, estado 
+            FROM usuario 
+            WHERE role != 'barber' 
+                AND role != 'admin'
+                AND (name LIKE ? OR apellido LIKE ? OR email LIKE ?)
+            ORDER BY estado = 'activo' DESC
+            LIMIT ? OFFSET ?`,
+            [`%${search}%`, `%${search}%`, `%${search}%` ,limit, offset]
         );
 
-        res.json(users)
+        const [[count]] = await pool.query(
+            `SELECT COUNT(*) as total 
+            FROM usuario 
+            WHERE role != 'barber' 
+                AND role != 'admin'
+                AND (name LIKE ? OR apellido LIKE ? OR email LIKE ?)`,
+                [`%${search}%`, `%${search}%`, `%${search}%`]
+            )
+
+
+        const total = count.total
+
+        const totalPages = Math.ceil(total / limit)
+
+        res.json({
+            data: users,
+            pagination: {
+                total,
+                page,
+                limit,
+                totalPages
+            }
+        })
+    
     } catch (error) {
         console.error(error)
         res.status(500).json({ message: "Error al traer todos los usuarios" })
@@ -78,6 +117,23 @@ export const getUserById = async (req, res) => {
 }
 
 
+
+export const getBarberos = async (req, res) => {
+    try {
+        const [barbers] = await pool.query(
+            "SELECT id_cliente, name, apellido, telefono, email, estado FROM usuario WHERE role = 'barber' AND estado= 'activo'"
+        );
+
+        res.json(barbers)
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Error al obtener barberos" })
+    }
+};
+
+
+
+
 // PUT
 
 export const updateUser = async (req, res) => {
@@ -85,8 +141,8 @@ export const updateUser = async (req, res) => {
         const { id } = req.params
         const { name, apellido, telefono, email } = req.body
 
-        if(!name || !apellido || !telefono || !email) {
-            return res.status(400).json({ message: "Faltan datos obligatorios"})
+        if (!name || !apellido || !telefono || !email) {
+            return res.status(400).json({ message: "Faltan datos obligatorios" })
         }
 
         const [result] = await pool.query(
@@ -97,16 +153,17 @@ export const updateUser = async (req, res) => {
         );
 
         if (result.affectedRows === 0) {
-            return res.status(404).json({ message: "Usuario no encontrado"})
+            return res.status(404).json({ message: "Usuario no encontrado" })
         }
 
-        res.json({ message: "Usuario actualizado correctamente"})
+        res.json({ message: "Usuario actualizado correctamente" })
 
     } catch (error) {
         console.error(error);
-        res.status(500).json({ message: "Error al actualizar usuario"})
+        res.status(500).json({ message: "Error al actualizar usuario" })
     }
 }
+
 
 
 // DELETE
@@ -120,8 +177,8 @@ export const deleteUser = async (req, res) => {
             [id]
         )
 
-        if(result.affectedRows === 0){
-            return res.status(404).json({ 
+        if (result.affectedRows === 0) {
+            return res.status(404).json({
                 message: "Usuario no encontrado"
             })
         }
@@ -132,6 +189,6 @@ export const deleteUser = async (req, res) => {
 
     } catch (error) {
         console.error(error)
-        res.status(500).json({ message: "Error al eliminar usuario"})
+        res.status(500).json({ message: "Error al eliminar usuario" })
     }
 }

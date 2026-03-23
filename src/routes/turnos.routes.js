@@ -1,6 +1,6 @@
 import { Router } from "express";
 
-import { cancelarTurno, crearTurno, finalizarTurno, getTurnosByBarber, getTurnosByUser, horariosDisponibles } from "../controllers/turnos.controller.js";
+import { cancelarTurno, crearTurno, finalizarTurno, getHistorialTurnos, getTurnosActivos, getTurnosByBarber, getTurnosByUser, horariosDisponibles } from "../controllers/turnos.controller.js";
 
 import verifyToken from "../middlewares/verifyToken.js";
 import { verifyRole } from "../middlewares/verifyRole.js";
@@ -8,10 +8,11 @@ import { verifyRole } from "../middlewares/verifyRole.js";
 const router = Router();
 
 //GET
-// router.get("/allTurnos", verifyToken, verifyRole(["admin"], getAllTurnos))
-router.get("/barbero/:id",verifyToken, verifyRole(["barber"]), getTurnosByBarber)
+router.get("/activos", verifyToken, verifyRole(["admin"]), getTurnosActivos)
+router.get("/barbero",verifyToken, verifyRole(["barber"]), getTurnosByBarber)
 router.get("/usuario",verifyToken, verifyRole(["usuario"]), getTurnosByUser)
 router.get("/horarios-disponibles", verifyToken, horariosDisponibles)
+router.get("/historial", verifyToken, verifyRole(["admin"]), getHistorialTurnos)
 
 // POST
 router.post("/",verifyToken, verifyRole(["usuario"]), crearTurno)

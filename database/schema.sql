@@ -59,6 +59,7 @@ CREATE TABLE horariotrabajo(
     dia ENUM('lunes','martes','miercoles','jueves','viernes','sabado','domingo') NOT NULL,
     horaInicio TIME NOT NULL ,
     horaFin TIME NOT NULL,
+    estado ENUM("activo", "oculto") DEFAULT "activo",
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
     FOREIGN KEY (barberID) REFERENCES usuario(id_cliente),

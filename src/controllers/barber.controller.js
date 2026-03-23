@@ -3,7 +3,7 @@ import pool from "../config/db.js"
 export const getBarbers = async (req, res) => {
     try {
         const [barbers] = await pool.query(
-            "SELECT id_cliente, name, apellido, telefono, email FROM usuario WHERE role = 'barber' AND estado = 'activo'"
+            "SELECT id_cliente, name, apellido, telefono, email, estado FROM usuario WHERE role = 'barber'"
         );
 
         res.json(barbers)
