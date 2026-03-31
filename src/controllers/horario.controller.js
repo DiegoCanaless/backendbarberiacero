@@ -1,4 +1,4 @@
-import pool from "../config/db.js";
+import { query } from "../config/db.js"
 
 
 export const crearHorario = async (req, res) => {
@@ -10,13 +10,15 @@ export const crearHorario = async (req, res) => {
     }
 
     try {
-        await pool.query(
+        // 1️⃣ Desactivar todos
+        await query(
             `UPDATE horariotrabajo
-             SET activo = 'oculto'
+             SET estado = 'oculto'
              WHERE barberID = ?`,
             [barberID]
         );
 
+        // 2️⃣ Reactivar o insertar
         for (const h of horarios) {
             const { dia, horaInicio, horaFin } = h;
 
@@ -28,15 +30,31 @@ export const crearHorario = async (req, res) => {
                 });
             }
 
-            await pool.query(
-                `INSERT INTO horariotrabajo (barberID, dia, horaInicio, horaFin, activo)
-                 VALUES (?, ?, ?, ?, 'activo')
-                 ON DUPLICATE KEY UPDATE 
-                    horaInicio = VALUES(horaInicio),
-                    horaFin = VALUES(horaFin),
-                    activo = true`,
-                [barberID, dia, horaInicio, horaFin]
+            // 🔍 Verificar si ya existe ese día
+            const [existe] = await query(
+                `SELECT id_horario
+                 FROM horariotrabajo
+                 WHERE barberID = ? AND dia = ?`,
+                [barberID, dia]
             );
+
+            if (existe.length > 0) {
+                // ✅ actualizar y activar
+                await query(
+                    `UPDATE horariotrabajo
+                     SET horaInicio = ?, horaFin = ?, estado = 'activo'
+                     WHERE barberID = ? AND dia = ?`,
+                    [horaInicio, horaFin, barberID, dia]
+                );
+            } else {
+                // ✅ insertar
+                await query(
+                    `INSERT INTO horariotrabajo 
+                     (barberID, dia, horaInicio, horaFin, estado)
+                     VALUES (?, ?, ?, ?, 'activo')`,
+                    [barberID, dia, horaInicio, horaFin]
+                );
+            }
         }
 
         res.json({ message: "Horarios guardados correctamente" });
@@ -48,15 +66,25 @@ export const crearHorario = async (req, res) => {
 };
 
 
+
 export const obtenerMisHorario = async (req, res) => {
     const barberID = req.user.id
 
     try {
-        const [rows] = await pool.query(
+        const [rows] = await query(
             `SELECT * FROM horariotrabajo
-            WHERE barberID = ?
-            AND activo = 'activo'
-            ORDER BY FIELD(dia,'lunes','martes','miercoles','jueves','viernes','sabado','domingo'),
+             WHERE barberID = ?
+             AND estado = 'activo'
+             ORDER BY 
+                CASE dia
+                    WHEN 'lunes' THEN 1
+                    WHEN 'martes' THEN 2
+                    WHEN 'miercoles' THEN 3
+                    WHEN 'jueves' THEN 4
+                    WHEN 'viernes' THEN 5
+                    WHEN 'sabado' THEN 6
+                    WHEN 'domingo' THEN 7
+                END,
                 horaInicio`,
             [barberID]
         );
@@ -71,29 +99,35 @@ export const obtenerMisHorario = async (req, res) => {
 
 export const toggleHorario = async (req, res) => {
     const barberID = req.user.id;
-    const { id } = req.params
+    const { id } = req.params;
 
     try {
+        // 🔍 Verificar existencia
+        const [horario] = await query(
+            `SELECT id_horario FROM horariotrabajo
+             WHERE id_horario = ? AND barberID = ?`,
+            [id, barberID]
+        );
 
-        const [result] = await pool.query(
+        if (horario.length === 0) {
+            return res.status(404).json({ message: "Horario no encontrado" });
+        }
+
+        // 🔁 Toggle estado
+        await query(
             `UPDATE horariotrabajo
              SET estado = CASE
                 WHEN estado = 'activo' THEN 'oculto'
                 ELSE 'activo'
-            END
-            WHERE id_horario = ?
-            AND barberID = ?`,
+             END
+             WHERE id_horario = ? AND barberID = ?`,
             [id, barberID]
         );
 
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ message: "Horario no encontrado" })
-        }
-
-        res.json({ message: "Estado del horario actualizado correctamente" })
+        res.json({ message: "Estado del horario actualizado correctamente" });
 
     } catch (error) {
-        console.error(error)
-        return res.status(500).json({ message: "Error al actualizar el horario" })
+        console.error(error);
+        return res.status(500).json({ message: "Error al actualizar el horario" });
     }
-}
+};

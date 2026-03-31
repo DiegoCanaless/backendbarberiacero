@@ -1,9 +1,9 @@
-import pool from "../config/db.js"
+import { query } from "../config/db.js"
 
 export const getBarbers = async (req, res) => {
     try {
-        const [barbers] = await pool.query(
-            "SELECT id_cliente, name, apellido, telefono, email, estado FROM usuario WHERE role = 'barber'"
+        const [barbers] = await query(
+            "SELECT id_usuario, name, apellido, telefono, email, estado FROM usuario WHERE role = 'barber'"
         );
 
         res.json(barbers)
@@ -17,12 +17,16 @@ export const getBarbers = async (req, res) => {
 export const getServiciosByBarber = async (req, res) => {
     const { id } = req.params;
 
+    if (isNaN(id)) {
+        return res.status(400).json({ message: "ID inválido" })
+    }
+
     try {
-        const [servicios] = await pool.query(
+        const [servicios] = await query(
             `SELECT s.id_servicio, s.nombre, s.precio, s.duracion
              FROM servicios s
              JOIN barbero_servicios bs ON s.id_servicio = bs.servicioID
-             JOIN usuario u ON bs.barberID = u.id_cliente
+             JOIN usuario u ON bs.barberID = u.id_usuario
              WHERE bs.barberID = ?
              AND bs.estado = 'activo'
              AND s.estado = 'activo'
@@ -30,9 +34,7 @@ export const getServiciosByBarber = async (req, res) => {
             [id]
         );
 
-        if (isNaN(id)) {
-            return res.status(400).json({ message: "ID inválido" })
-        }
+
 
 
         res.json(servicios)
@@ -48,23 +50,24 @@ export const getHorarioBarbero = async (req, res) => {
 
     try {
 
-        const [rows] = await pool.query(
+        const [rows] = await query(
             `SELECT dia, horaInicio, horaFin
             FROM horariotrabajo
             WHERE barberID = ?
-            ORDER BY FIELD(
-                dia,
-                'lunes',
-                'martes',
-                'miercoles',
-                'jueves',
-                'viernes',
-                'sabado',
-                'domingo'
-            )
-`,
+            AND estado = 'activo'
+            ORDER BY 
+        CASE dia
+            WHEN 'lunes' THEN 1
+            WHEN 'martes' THEN 2
+            WHEN 'miercoles' THEN 3
+            WHEN 'jueves' THEN 4
+            WHEN 'viernes' THEN 5
+            WHEN 'sabado' THEN 6
+            WHEN 'domingo' THEN 7
+        END`,
             [id]
         );
+
 
         res.json(rows);
 

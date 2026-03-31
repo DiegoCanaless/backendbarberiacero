@@ -1,10 +1,10 @@
-import jwt  from "jsonwebtoken"
+import jwt from "jsonwebtoken"
 
 export const verifyToken = (req, res, next) => {
     const token = req.cookies.token;
 
-    if(!token){
-        return res.status(401).json({ message: "Token requerido"})
+    if (!token) {
+        return res.status(401).json({ message: "Token requerido" })
     }
 
     try {
@@ -12,10 +12,14 @@ export const verifyToken = (req, res, next) => {
 
         req.user = decoded
         next();
-    } catch (error){
-        console.error(error)
-        return req.status(401).json({ message: "Token invalido"})
+    } catch (error) {
+        res.clearCookie("token");
+
+        return res.status(401).json({
+            message: "Token inválido o expirado"
+        });
     }
+
 }
 
 export default verifyToken

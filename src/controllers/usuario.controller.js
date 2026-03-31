@@ -1,4 +1,4 @@
-import pool from "../config/db.js";
+import { query } from "../config/db.js"
 import bcrypt from "bcrypt";
 
 
@@ -13,8 +13,8 @@ export const createBarber = async (req, res) => {
             return res.status(400).json({ message: "Todos los campos tienen que estar llenos" })
         }
 
-        const [exist] = await pool.query(
-            "SELECT id_cliente FROM usuario WHERE email = ?",
+        const [exist] = await query(
+            "SELECT id_usuario FROM usuario WHERE email = ?",
             [email]
         )
 
@@ -24,7 +24,7 @@ export const createBarber = async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        const [result] = await pool.query(
+        const [result] = await query(
             `INSERT INTO usuario (name, apellido, email, telefono, password, role)
             VALUES (?, ?, ?, ?, ?, ?)`,
             [name, apellido, email, telefono, hashedPassword, "barber"]
@@ -53,8 +53,8 @@ export const getUsers = async (req, res) => {
 
         const offset = (page - 1) * limit
 
-        const [users] = await pool.query(
-            `SELECT id_cliente, name, apellido, email, telefono, role, estado 
+        const [users] = await query(
+            `SELECT id_usuario, name, apellido, email, telefono, role, estado 
             FROM usuario 
             WHERE role != 'barber' 
                 AND role != 'admin'
@@ -64,7 +64,7 @@ export const getUsers = async (req, res) => {
             [`%${search}%`, `%${search}%`, `%${search}%` ,limit, offset]
         );
 
-        const [[count]] = await pool.query(
+        const [[count]] = await query(
             `SELECT COUNT(*) as total 
             FROM usuario 
             WHERE role != 'barber' 
@@ -99,8 +99,8 @@ export const getUserById = async (req, res) => {
 
         const { id } = req.params;
 
-        const [rows] = await pool.query(
-            "SELECT id_cliente, name, apellido, telefono, email, role FROM usuario WHERE id_cliente = ?",
+        const [rows] = await query(
+            "SELECT id_usuario, name, apellido, telefono, email, role FROM usuario WHERE id_usuario = ?",
             [id]
         );
 
@@ -120,8 +120,8 @@ export const getUserById = async (req, res) => {
 
 export const getBarberos = async (req, res) => {
     try {
-        const [barbers] = await pool.query(
-            "SELECT id_cliente, name, apellido, telefono, email, estado FROM usuario WHERE role = 'barber' AND estado= 'activo'"
+        const [barbers] = await query(
+            "SELECT id_usuario, name, apellido, telefono, email, estado FROM usuario WHERE role = 'barber' AND estado= 'activo'"
         );
 
         res.json(barbers)
@@ -145,10 +145,10 @@ export const updateUser = async (req, res) => {
             return res.status(400).json({ message: "Faltan datos obligatorios" })
         }
 
-        const [result] = await pool.query(
+        const [result] = await query(
             `UPDATE usuario
             SET name = ?, apellido = ?, telefono = ?, email = ?
-            WHERE id_cliente = ?`,
+            WHERE id_usuario = ?`,
             [name, apellido, telefono, email, id]
         );
 
@@ -172,8 +172,8 @@ export const deleteUser = async (req, res) => {
     try {
         const { id } = req.params
 
-        const [result] = await pool.query(
-            "UPDATE usuario SET estado = 'oculto' WHERE id_cliente = ?",
+        const [result] = await query(
+            "UPDATE usuario SET estado = 'oculto' WHERE id_usuario = ?",
             [id]
         )
 

@@ -11,7 +11,7 @@ router.post("/login", login)
 router.post("/register", register)
 router.post("/logout", logout)
 
-router.get("/me", me)
+router.get("/me", verifyToken, me)
 
 router.put("/:id", verifyToken, verifyRole(["admin"]), changeStatus )
 

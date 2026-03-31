@@ -1,13 +1,23 @@
-import mysql from "mysql2/promise"
+import sqlite3 from "sqlite3"
 
-const pool = mysql.createPool({
-    host: "localhost",
-    user: "root",
-    password: "",
-    database: "barberia",
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0,
+const db = new sqlite3.Database("./database.db", (err) => {
+    if (err) {
+        console.error("Error conectando a SQLite: ", err.message)
+    } else {
+        console.log("SQLite conectado")
+    }
 })
 
-export default pool
+export const query = (sql, params = []) => {
+    return new Promise((resolve, reject) => {
+        db.all(sql, params, (err, rows) => {
+            if (err) {
+                reject(err);
+            } else {
+                resolve([rows])
+            }
+        })
+    })
+}
+
+export default db

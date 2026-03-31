@@ -1,4 +1,4 @@
-import pool from "../config/db.js"
+import { query } from "../config/db.js"
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
@@ -11,8 +11,8 @@ export const login = async (req, res) => {
             return res.status(400).json({ message: "Email y password son requeridos" })
         }
 
-        const [rows] = await pool.query(
-            "SELECT id_cliente, name, apellido, password, email, telefono, role, estado FROM usuario WHERE email = ?",
+        const [rows] = await query(
+            "SELECT id_usuario, name, apellido, password, email, telefono, role, estado FROM usuario WHERE email = ?",
             [email]
         );
 
@@ -20,12 +20,13 @@ export const login = async (req, res) => {
             return res.status(401).json({ message: "Credenciales son invalidas" })
         }
 
-        const user = rows[0]
-        const passwordMatch = await bcrypt.compare(password, user.password);
+        const user = rows[0];
 
         if (user.estado === "oculto") {
             return res.status(403).json({ message: "Usuario bloqueado" })
         }
+
+        const passwordMatch = await bcrypt.compare(password, user.password);
 
 
         if (!passwordMatch) {
@@ -34,7 +35,7 @@ export const login = async (req, res) => {
 
         const token = jwt.sign(
             {
-                id: user.id_cliente,
+                id: user.id_usuario,
                 role: user.role,
                 name: user.name,
                 apellido: user.apellido,
@@ -46,7 +47,7 @@ export const login = async (req, res) => {
         )
 
         const userInfo = {
-            id_cliente: user.id_cliente,
+            id_usuario: user.id_usuario,
             name: user.name,
             apellido: user.apellido,
             email: user.email,
@@ -56,7 +57,7 @@ export const login = async (req, res) => {
 
         res.cookie("token", token, {
             httpOnly: true,
-            secure: false,
+            secure: process.env.NODE_ENV === "production",
             sameSite: "lax",
             maxAge: 1000 * 60 * 60 * 24
         })
@@ -80,8 +81,8 @@ export const register = async (req, res) => {
             return res.status(400).json({ message: "Todos los campos tienen que estar llenos" })
         }
 
-        const [exist] = await pool.query(
-            "SELECT id_cliente FROM usuario WHERE email = ?",
+        const [exist] = await query(
+            "SELECT id_usuario FROM usuario WHERE email = ?",
             [email]
         )
 
@@ -91,16 +92,22 @@ export const register = async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        const [result] = await pool.query(
+        const [result] = await query(
             `INSERT INTO usuario (name, apellido, email, telefono, password, role)
             VALUES(?, ?, ?, ?, ?, ?)`,
             [name, apellido, email, telefono, hashedPassword, "usuario"]
         )
 
         res.status(201).json({
-            message: "Usuario registrado correctamente",
-            id: result.insertId
-        })
+            user: {
+                id: result.insertId,
+                name,
+                apellido,
+                email,
+                role: "usuario"
+            }
+        });
+
 
 
     } catch (error) {
@@ -129,19 +136,19 @@ export const me = async (req, res) => {
 
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-        const [rows] = await pool.query(
-            "SELECT id_cliente, name, email, role, estado FROM usuario WHERE id_cliente = ?",
+        const [rows] = await query(
+            "SELECT id_usuario, name, email, role, estado FROM usuario WHERE id_usuario = ?",
             [decoded.id]
         )
 
-        if(rows.length === 0){
-            return res.status(401).json({ message: "Usuario no encontrado"})
+        if (rows.length === 0) {
+            return res.status(401).json({ message: "Usuario no encontrado" })
         }
 
         const user = rows[0]
 
-        if(user.estado === "oculto"){
-            return res.status(403).json({message: "Usuario bloqueado"})
+        if (user.estado === "oculto") {
+            return res.status(403).json({ message: "Usuario bloqueado" })
         }
 
 
@@ -159,26 +166,46 @@ export const me = async (req, res) => {
 
 export const changeStatus = async (req, res) => {
     try {
-        const { id } = req.params
-        const { estado } = req.body
+        const { id } = req.params;
+        const { estado } = req.body;
 
+        if (isNaN(id)) {
+            return res.status(400).json({ message: "ID inválido" });
+        }
 
         if (!["activo", "oculto"].includes(estado)) {
-            return res.status(400).json({ message: "Estado inválido" })
+            return res.status(400).json({ message: "Estado inválido" });
         }
 
-        const [result] = await pool.query(
-            "UPDATE usuario SET estado = ? WHERE id_cliente = ?",
+        const [user] = await query(
+            "SELECT id_usuario FROM usuario WHERE id_usuario = ?",
+            [id]
+        );
+
+        if (user.length === 0) {
+            return res.status(404).json({ message: "Usuario no encontrado" });
+        }
+
+        await query(
+            "UPDATE usuario SET estado = ? WHERE id_usuario = ?",
             [estado, id]
-        )
-
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ message: "Usuario no encontrado" })
+        );
+        
+        if (estado === "oculto") {
+            await query(
+                `UPDATE turnos 
+                 SET estado = 'Cancelado'
+                 WHERE clienteID = ?
+                 AND estado = 'Reservado'`,
+                [id]
+            );
         }
 
-        res.json({ message: "Estado actualizado" })
+        res.json({ message: "Estado actualizado correctamente" });
 
     } catch (error) {
-        res.status(500).json({ message: "Error al actualizar el estado" })
+        console.error(error);
+        res.status(500).json({ message: "Error al actualizar el estado" });
     }
-}
+};
+

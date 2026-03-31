@@ -6,7 +6,7 @@ export const verifyRole = (rolesPermitidos) => {
 
         if(!rolesPermitidos.includes(userRole)) {
             return res.status(403).json({
-                messgae: "No tenes permiso para esta accion"
+                message: "No tenes permiso para esta accion"
             })
         }
 

@@ -3,7 +3,7 @@ CREATE DATABASE IF NOT EXISTS barberia;
 USE barberia;
 
 CREATE TABLE usuario(
-    id_cliente INT PRIMARY KEY AUTO_INCREMENT,
+    id_usuario INT PRIMARY KEY AUTO_INCREMENT,
     name VARCHAR(100) NOT NULL,
     apellido VARCHAR(100) NOT NULL,
     email VARCHAR(150) NOT NULL UNIQUE,
@@ -30,28 +30,29 @@ CREATE TABLE barbero_servicios (
     estado ENUM("activo", "oculto") DEFAULT "activo",
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
-    FOREIGN KEY (barberID) REFERENCES usuario(id_cliente),
-    FOREIGN KEY (servicioID) REFERENCES servicios(id_servicio),
+    FOREIGN KEY (barberID) REFERENCES usuario(id_usuario) ON DELETE CASCADE,
+    FOREIGN KEY (servicioID) REFERENCES servicios(id_servicio) ON DELETE CASCADE,
 
     UNIQUE (barberID, servicioID)
 );
 
 
-CREATE TABLE turnos(
-    id_turno INT PRIMARY KEY AUTO_INCREMENT ,
-    clienteID INT NOT NULL,
-    barberID INT NOT NULL,
-    servicioID INT NOT NULL,
-    fecha DATE NOT NULL,
-    horario TIME NOT NULL,
-    estado ENUM("Reservado", "Cancelado","Finalizado") DEFAULT "Reservado",
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ,
+CREATE TABLE IF NOT EXISTS turnos (
+    id_turno INTEGER PRIMARY KEY AUTOINCREMENT,
+    clienteID INTEGER NOT NULL,
+    barberID INTEGER NOT NULL,
+    servicioID INTEGER NOT NULL,
+    fecha TEXT NOT NULL,
+    horario TEXT NOT NULL,
+    horaFin TEXT NOT NULL,
+    estado TEXT DEFAULT 'reservado',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
-    FOREIGN KEY (clienteID) REFERENCES usuario(id_cliente),
-    FOREIGN KEY (barberID) REFERENCES usuario(id_cliente),
-    FOREIGN KEY (servicioID) REFERENCES servicios(id_servicio)
-
+    FOREIGN KEY (clienteID) REFERENCES usuario(id_usuario) ON DELETE CASCADE,
+    FOREIGN KEY (barberID) REFERENCES usuario(id_usuario) ON DELETE CASCADE,
+    FOREIGN KEY (servicioID) REFERENCES servicios(id_servicio) ON DELETE CASCADE
 );
+
 
 CREATE TABLE horariotrabajo(
     id_horario INT PRIMARY KEY AUTO_INCREMENT ,
@@ -62,7 +63,7 @@ CREATE TABLE horariotrabajo(
     estado ENUM("activo", "oculto") DEFAULT "activo",
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
-    FOREIGN KEY (barberID) REFERENCES usuario(id_cliente),
+    FOREIGN KEY (barberID) REFERENCES usuario(id_usuario) ON DELETE CASCADE,
 
     UNIQUE (barberID, dia, horaInicio, horaFin)
 
