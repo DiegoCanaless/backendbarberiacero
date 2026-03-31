@@ -55,10 +55,12 @@ export const login = async (req, res) => {
             telefono: user.telefono
         }
 
+        const isProduction = process.env.NODE_ENV === "production";
+
         res.cookie("token", token, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
+            secure: isProduction,
+            sameSite: isProduction ? "none" : "lax",
             maxAge: 1000 * 60 * 60 * 24
         })
             .json({
@@ -190,7 +192,7 @@ export const changeStatus = async (req, res) => {
             "UPDATE usuario SET estado = ? WHERE id_usuario = ?",
             [estado, id]
         );
-        
+
         if (estado === "oculto") {
             await query(
                 `UPDATE turnos 
