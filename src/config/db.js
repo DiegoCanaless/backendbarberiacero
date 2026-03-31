@@ -1,23 +1,19 @@
-import sqlite3 from "sqlite3"
+import Database from "better-sqlite3";
 
-const db = new sqlite3.Database("./database.db", (err) => {
-    if (err) {
-        console.error("Error conectando a SQLite: ", err.message)
-    } else {
-        console.log("SQLite conectado")
-    }
-})
+const db = new Database("./database.db");
+
+console.log("SQLite conectado");
 
 export const query = (sql, params = []) => {
-    return new Promise((resolve, reject) => {
-        db.all(sql, params, (err, rows) => {
-            if (err) {
-                reject(err);
-            } else {
-                resolve([rows])
-            }
-        })
-    })
-}
+    const stmt = db.prepare(sql);
 
-export default db
+    if (sql.trim().toUpperCase().startsWith("SELECT")) {
+        const rows = stmt.all(params);
+        return [rows];
+    } else {
+        const result = stmt.run(params);
+        return [result];
+    }
+};
+
+export default db;
