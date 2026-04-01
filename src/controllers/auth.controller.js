@@ -135,7 +135,16 @@ export const logout = (req, res) => {
 
 export const me = async (req, res) => {
     try {
-        const token = req.cookies.token;
+        // 👇 Intenta obtener token de la cookie
+        let token = req.cookies.token;
+
+        // 👇 Si no hay cookie, intenta obtener del header Authorization
+        if (!token) {
+            const authHeader = req.headers.authorization;
+            if (authHeader && authHeader.startsWith("Bearer ")) {
+                token = authHeader.substring(7);
+            }
+        }
 
         if (!token) {
             return res.status(401).json({ message: "No autenticado" })
@@ -158,16 +167,16 @@ export const me = async (req, res) => {
             return res.status(403).json({ message: "Usuario bloqueado" })
         }
 
-
         res.json({
-            id: decoded.id,
+            id_usuario: decoded.id,
             role: decoded.role,
             name: decoded.name,
             email: decoded.email
         });
 
-    } catch {
-        return res.status(401).json({ message: "Token Invalido" })
+    } catch (error) {
+        console.error(error);
+        return res.status(401).json({ message: "Token Inválido" })
     }
 }
 
