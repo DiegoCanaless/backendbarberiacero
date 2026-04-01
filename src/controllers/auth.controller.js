@@ -61,10 +61,12 @@ export const login = async (req, res) => {
             httpOnly: true,
             secure: isProduction,
             sameSite: isProduction ? "none" : "lax",
-            maxAge: 1000 * 60 * 60 * 24
+            maxAge: 1000 * 60 * 60 * 24,
+            path: "/",  
         })
             .json({
                 user: userInfo,
+                token: token,
                 message: "Login exitoso",
             })
 
@@ -120,10 +122,14 @@ export const register = async (req, res) => {
 
 
 export const logout = (req, res) => {
+
+    const isProduction = process.env.NODE_ENV === "production";
+
     res.clearCookie("token", {
         httpOnly: true,
-        secure: false,
-        sameSite: "lax",
+        secure: isProduction,
+        sameSite: isProduction ? "none" : "lax",
+        path: "/"
     })
         .json({ message: "Logout exitoso" })
 }
