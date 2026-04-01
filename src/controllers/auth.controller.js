@@ -28,7 +28,6 @@ export const login = async (req, res) => {
 
         const passwordMatch = await bcrypt.compare(password, user.password);
 
-
         if (!passwordMatch) {
             return res.status(401).json({ message: "Credenciales son invalidas" })
         }
@@ -62,14 +61,14 @@ export const login = async (req, res) => {
             secure: isProduction,
             sameSite: isProduction ? "none" : "lax",
             maxAge: 1000 * 60 * 60 * 24,
-            path: "/",  
+            path: "/"
         })
-            .json({
-                user: userInfo,
-                token: token,
-                message: "Login exitoso",
-            })
 
+        res.status(200).json({
+            user: userInfo,
+            token: token,
+            message: "Login exitoso"
+        })
 
     } catch (error) {
         console.error(error)
