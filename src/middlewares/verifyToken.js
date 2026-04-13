@@ -1,25 +1,24 @@
-import jwt from "jsonwebtoken"
+import jwt from "jsonwebtoken";
 
 export const verifyToken = (req, res, next) => {
-    const token = req.cookies.token;
+    const authHeader = req.headers.authorization;
 
-    if (!token) {
-        return res.status(401).json({ message: "Token requerido" })
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({ message: "Token requerido" });
     }
+
+    const token = authHeader.split(" ")[1];
 
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-        req.user = decoded
+        req.user = decoded;
         next();
     } catch (error) {
-        res.clearCookie("token");
-
         return res.status(401).json({
             message: "Token inválido o expirado"
         });
     }
+};
 
-}
-
-export default verifyToken
+export default verifyToken;

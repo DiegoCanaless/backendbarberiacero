@@ -1,29 +1,29 @@
-import { query } from "../config/db.js"
+import { query } from "../config/db.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
-
+// ================= LOGIN =================
 export const login = async (req, res) => {
     try {
-        const { email, password } = req.body
+        const { email, password } = req.body;
 
         if (!email || !password) {
-            return res.status(400).json({ message: "Email y password son requeridos" })
+            return res.status(400).json({ message: "Email y password son requeridos" });
         }
 
         const [rows] = await query(
-            "SELECT id_usuario, name, apellido, password, email, telefono, role, estado, provider, google_id, profile_complete FROM usuario WHERE email = ?",
+            "SELECT * FROM usuario WHERE email = ?",
             [email]
         );
 
         if (rows.length === 0) {
-            return res.status(401).json({ message: "Credenciales son invalidas" })
+            return res.status(401).json({ message: "Credenciales inválidas" });
         }
 
         const user = rows[0];
 
         if (user.estado === "oculto") {
-            return res.status(403).json({ message: "Usuario bloqueado" })
+            return res.status(403).json({ message: "Usuario bloqueado" });
         }
 
         if (user.provider === "google") {
@@ -32,156 +32,114 @@ export const login = async (req, res) => {
             });
         }
 
+        const match = await bcrypt.compare(password, user.password);
 
-        const passwordMatch = await bcrypt.compare(password, user.password);
-
-        if (!passwordMatch) {
-            return res.status(401).json({ message: "Credenciales son invalidas" })
+        if (!match) {
+            return res.status(401).json({ message: "Credenciales inválidas" });
         }
 
         const token = jwt.sign(
             {
                 id: user.id_usuario,
                 role: user.role,
-                name: user.name,
-                apellido: user.apellido,
-                email: user.email,
-                telefono: user.telefono
+                email: user.email
             },
             process.env.JWT_SECRET,
             { expiresIn: "1d" }
-        )
+        );
 
-        const userInfo = {
-            id_usuario: user.id_usuario,
-            name: user.name,
-            apellido: user.apellido,
-            email: user.email,
-            role: user.role,
-            telefono: user.telefono,
-            provider: user.provider,
-            google_id: user.google_id,
-            profile_complete: user.profile_complete
-        }
-
-        const isProduction = process.env.NODE_ENV === "production";
-
-        res.cookie("token", token, {
-            httpOnly: true,
-            secure: isProduction,
-            sameSite: isProduction ? "none" : "lax",
-            maxAge: 1000 * 60 * 60 * 24,
-            path: "/"
-        })
-
-        res.status(200).json({
-            user: userInfo,
-            token: token,
-            message: "Login exitoso"
-        })
+        res.json({
+            user: {
+                id_usuario: user.id_usuario,
+                name: user.name,
+                apellido: user.apellido,
+                email: user.email,
+                telefono: user.telefono,
+                role: user.role,
+                provider: user.provider,
+                profile_complete: user.profile_complete
+            },
+            token
+        });
 
     } catch (error) {
-        console.error(error)
-        res.status(500).json({ message: "Error al Logearse" })
+        console.error(error);
+        res.status(500).json({ message: "Error al logearse" });
     }
-}
+};
 
+// ================= REGISTER =================
 export const register = async (req, res) => {
     try {
-        const { name, apellido, email, password, telefono } = req.body
+        const { name, apellido, email, password, telefono } = req.body;
 
         if (!name || !apellido || !email || !password || !telefono) {
-            return res.status(400).json({ message: "Todos los campos tienen que estar llenos" })
+            return res.status(400).json({ message: "Todos los campos son obligatorios" });
         }
 
         if (!/^\+?[1-9]\d{7,14}$/.test(telefono)) {
             return res.status(400).json({ message: "Telefono inválido" });
         }
 
-
         const [exist] = await query(
             "SELECT id_usuario FROM usuario WHERE email = ?",
             [email]
-        )
+        );
 
         if (exist.length > 0) {
-            return res.status(409).json({ message: "El correo ya esta registrado" })
+            return res.status(409).json({ message: "El correo ya está registrado" });
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const [result] = await query(
             `INSERT INTO usuario (name, apellido, email, telefono, password, role, provider, profile_complete)
-            VALUES(?, ?, ?, ?, ?, ?, ? , ?)`,
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
             [name, apellido, email, telefono, hashedPassword, "usuario", "local", 1]
-        )
+        );
 
         res.status(201).json({
             user: {
-                id: result.lastInsertRowid,
+                id_usuario: result.lastInsertRowid,
                 name,
                 apellido,
                 email,
-                role: "usuario",
                 telefono,
+                role: "usuario",
                 profile_complete: 1
             }
         });
 
-
-
     } catch (error) {
-        console.error(error)
-        res.status(500).json({ message: "Error al registrarse " })
+        console.error(error);
+        res.status(500).json({ message: "Error al registrarse" });
     }
-}
+};
 
-
+// ================= LOGOUT =================
 export const logout = (req, res) => {
+    // 👉 Ya no hay cookies
+    res.json({ message: "Logout exitoso" });
+};
 
-    const isProduction = process.env.NODE_ENV === "production";
-
-    res.clearCookie("token", {
-        httpOnly: true,
-        secure: isProduction,
-        sameSite: isProduction ? "none" : "lax",
-        path: "/"
-    })
-        .json({ message: "Logout exitoso" })
-}
-
+// ================= ME =================
 export const me = async (req, res) => {
     try {
-        // 👇 Intenta obtener token de la cookie
-        let token = req.cookies.token;
-
-        // 👇 Si no hay cookie, intenta obtener del header Authorization
-        if (!token) {
-            const authHeader = req.headers.authorization;
-            if (authHeader && authHeader.startsWith("Bearer ")) {
-                token = authHeader.substring(7);
-            }
-        }
-
-        if (!token) {
-            return res.status(401).json({ message: "No autenticado" })
-        }
-
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const userId = req.user.id;
 
         const [rows] = await query(
-            "SELECT id_usuario, name, email, role, estado, telefono FROM usuario WHERE id_usuario = ?",
-            [decoded.id]
-        )
+            "SELECT * FROM usuario WHERE id_usuario = ?",
+            [userId]
+        );
 
         if (rows.length === 0) {
-            return res.status(401).json({ message: "Usuario no encontrado" })
+            return res.status(404).json({ message: "Usuario no encontrado" });
         }
 
-        const user = rows[0]
+        const user = rows[0];
 
         if (user.estado === "oculto") {
-            return res.status(403).json({ message: "Usuario bloqueado" })
+            return res.status(403).json({ message: "Usuario bloqueado" });
         }
 
         res.json({
@@ -190,71 +148,25 @@ export const me = async (req, res) => {
             apellido: user.apellido,
             email: user.email,
             telefono: user.telefono,
-            role: user.role
+            role: user.role,
+            profile_complete: user.profile_complete
         });
 
-
     } catch (error) {
         console.error(error);
-        return res.status(401).json({ message: "Token Inválido" })
-    }
-}
-
-export const changeStatus = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { estado } = req.body;
-
-        if (isNaN(id)) {
-            return res.status(400).json({ message: "ID inválido" });
-        }
-
-        if (!["activo", "oculto"].includes(estado)) {
-            return res.status(400).json({ message: "Estado inválido" });
-        }
-
-        const [user] = await query(
-            "SELECT id_usuario FROM usuario WHERE id_usuario = ?",
-            [id]
-        );
-
-        if (user.length === 0) {
-            return res.status(404).json({ message: "Usuario no encontrado" });
-        }
-
-        await query(
-            "UPDATE usuario SET estado = ? WHERE id_usuario = ?",
-            [estado, id]
-        );
-
-        if (estado === "oculto") {
-            await query(
-                `UPDATE turnos 
-                 SET estado = 'Cancelado'
-                 WHERE clienteID = ?
-                 AND estado = 'Reservado'`,
-                [id]
-            );
-        }
-
-        res.json({ message: "Estado actualizado correctamente" });
-
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: "Error al actualizar el estado" });
+        res.status(500).json({ message: "Error obteniendo usuario" });
     }
 };
 
+// ================= GOOGLE AUTH =================
 export const googleAuth = async (req, res) => {
     try {
         const { name, email, google_id } = req.body;
 
         if (!email || !google_id) {
-            return res.status(400).json({ message: "Datos de Google incompletos" });
+            return res.status(400).json({ message: "Datos incompletos" });
         }
 
-
-        // 🔍 Buscar usuario
         const [rows] = await query(
             "SELECT * FROM usuario WHERE email = ?",
             [email]
@@ -263,11 +175,9 @@ export const googleAuth = async (req, res) => {
         let user;
 
         if (rows.length === 0) {
-
             const [result] = await query(
-                `INSERT INTO usuario 
-                (name, email, provider, google_id, role, profile_complete)
-                VALUES (?, ?, ?, ?, ?, ?)`,
+                `INSERT INTO usuario (name, email, provider, google_id, role, profile_complete)
+                 VALUES (?, ?, ?, ?, ?, ?)`,
                 [name, email, "google", google_id, "usuario", 0]
             );
 
@@ -292,27 +202,25 @@ export const googleAuth = async (req, res) => {
         const token = jwt.sign(
             {
                 id: user.id_usuario,
-                email: user.email,
                 role: user.role,
+                email: user.email
             },
             process.env.JWT_SECRET,
             { expiresIn: "1d" }
         );
 
-        const isProduction = process.env.NODE_ENV === "production";
-
-        res.cookie("token", token, {
-            httpOnly: true,
-            secure: isProduction,
-            sameSite: isProduction ? "none" : "lax",
-            maxAge: 1000 * 60 * 60 * 24 * 7,
-            path: "/"
-        })
-
         res.json({
-            user,
+            user: {
+                id_usuario: user.id_usuario,
+                name: user.name,
+                apellido: user.apellido,
+                email: user.email,
+                telefono: user.telefono,
+                role: user.role,
+                profile_complete: user.profile_complete
+            },
             token
-        })
+        });
 
     } catch (error) {
         console.error(error);
@@ -320,17 +228,15 @@ export const googleAuth = async (req, res) => {
     }
 };
 
-
+// ================= COMPLETAR PERFIL =================
 export const completarPerfil = async (req, res) => {
     try {
-        const { telefono } = req.body
+        const { telefono } = req.body;
         const userId = req.user.id;
 
         if (!/^\+[1-9]\d{7,14}$/.test(telefono)) {
             return res.status(400).json({ message: "Telefono inválido" });
         }
-
-
 
         await query(
             `UPDATE usuario 
@@ -358,8 +264,8 @@ export const completarPerfil = async (req, res) => {
             }
         });
 
-
     } catch (error) {
+        console.error(error);
         res.status(500).json({ message: "Error completando perfil" });
     }
-}
+};
