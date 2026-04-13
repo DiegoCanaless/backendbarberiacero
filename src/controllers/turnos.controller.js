@@ -293,7 +293,6 @@ export const cancelarTurno = async (req, res) => {
 
 export const finalizarTurno = async (req, res) => {
   const { id } = req.params;
-  const userId = req.user.id;
 
   try {
     if (isNaN(id)) {
@@ -310,10 +309,6 @@ export const finalizarTurno = async (req, res) => {
     }
 
     const turno = rows[0];
-
-    if (turno.barberID !== userId) {
-      return res.status(403).json({ message: "No autorizado" });
-    }
 
     if (turno.estado !== "Reservado") {
       return res.status(400).json({ message: "El turno no puede ser finalizado" });

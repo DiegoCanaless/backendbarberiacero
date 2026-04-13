@@ -12,7 +12,7 @@ export const login = async (req, res) => {
         }
 
         const [rows] = await query(
-            "SELECT id_usuario, name, apellido, password, email, telefono, role, estado FROM usuario WHERE email = ?",
+            "SELECT id_usuario, name, apellido, password, email, telefono, role, estado, provider, google_id, profile_complete FROM usuario WHERE email = ?",
             [email]
         );
 
@@ -25,6 +25,13 @@ export const login = async (req, res) => {
         if (user.estado === "oculto") {
             return res.status(403).json({ message: "Usuario bloqueado" })
         }
+
+        if (user.provider === "google") {
+            return res.status(400).json({
+                message: "Este usuario usa login con Google"
+            });
+        }
+
 
         const passwordMatch = await bcrypt.compare(password, user.password);
 
@@ -51,7 +58,10 @@ export const login = async (req, res) => {
             apellido: user.apellido,
             email: user.email,
             role: user.role,
-            telefono: user.telefono
+            telefono: user.telefono,
+            provider: user.provider,
+            google_id: user.google_id,
+            profile_complete: user.profile_complete
         }
 
         const isProduction = process.env.NODE_ENV === "production";
@@ -84,6 +94,11 @@ export const register = async (req, res) => {
             return res.status(400).json({ message: "Todos los campos tienen que estar llenos" })
         }
 
+        if (!/^\+?[1-9]\d{7,14}$/.test(telefono)) {
+            return res.status(400).json({ message: "Telefono inválido" });
+        }
+
+
         const [exist] = await query(
             "SELECT id_usuario FROM usuario WHERE email = ?",
             [email]
@@ -96,18 +111,20 @@ export const register = async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const [result] = await query(
-            `INSERT INTO usuario (name, apellido, email, telefono, password, role)
-            VALUES(?, ?, ?, ?, ?, ?)`,
-            [name, apellido, email, telefono, hashedPassword, "usuario"]
+            `INSERT INTO usuario (name, apellido, email, telefono, password, role, provider, profile_complete)
+            VALUES(?, ?, ?, ?, ?, ?, ? , ?)`,
+            [name, apellido, email, telefono, hashedPassword, "usuario", "local", 1]
         )
 
         res.status(201).json({
             user: {
-                id: result.insertId,
+                id: result.lastInsertRowid,
                 name,
                 apellido,
                 email,
-                role: "usuario"
+                role: "usuario",
+                telefono,
+                profile_complete: 1
             }
         });
 
@@ -153,7 +170,7 @@ export const me = async (req, res) => {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
         const [rows] = await query(
-            "SELECT id_usuario, name, email, role, estado FROM usuario WHERE id_usuario = ?",
+            "SELECT id_usuario, name, email, role, estado, telefono FROM usuario WHERE id_usuario = ?",
             [decoded.id]
         )
 
@@ -168,11 +185,14 @@ export const me = async (req, res) => {
         }
 
         res.json({
-            id_usuario: decoded.id,
-            role: decoded.role,
-            name: decoded.name,
-            email: decoded.email
+            id_usuario: user.id_usuario,
+            name: user.name,
+            apellido: user.apellido,
+            email: user.email,
+            telefono: user.telefono,
+            role: user.role
         });
+
 
     } catch (error) {
         console.error(error);
@@ -225,3 +245,121 @@ export const changeStatus = async (req, res) => {
     }
 };
 
+export const googleAuth = async (req, res) => {
+    try {
+        const { name, email, google_id } = req.body;
+
+        if (!email || !google_id) {
+            return res.status(400).json({ message: "Datos de Google incompletos" });
+        }
+
+
+        // 🔍 Buscar usuario
+        const [rows] = await query(
+            "SELECT * FROM usuario WHERE email = ?",
+            [email]
+        );
+
+        let user;
+
+        if (rows.length === 0) {
+
+            const [result] = await query(
+                `INSERT INTO usuario 
+                (name, email, provider, google_id, role, profile_complete)
+                VALUES (?, ?, ?, ?, ?, ?)`,
+                [name, email, "google", google_id, "usuario", 0]
+            );
+
+            const [newUser] = await query(
+                "SELECT * FROM usuario WHERE id_usuario = ?",
+                [result.lastInsertRowid]
+            );
+
+            user = newUser[0];
+
+        } else {
+            user = rows[0];
+
+            if (!user.google_id) {
+                await query(
+                    "UPDATE usuario SET google_id = ?, provider = 'google' WHERE id_usuario = ?",
+                    [google_id, user.id_usuario]
+                );
+            }
+        }
+
+        const token = jwt.sign(
+            {
+                id: user.id_usuario,
+                email: user.email,
+                role: user.role,
+            },
+            process.env.JWT_SECRET,
+            { expiresIn: "1d" }
+        );
+
+        const isProduction = process.env.NODE_ENV === "production";
+
+        res.cookie("token", token, {
+            httpOnly: true,
+            secure: isProduction,
+            sameSite: isProduction ? "none" : "lax",
+            maxAge: 1000 * 60 * 60 * 24 * 7,
+            path: "/"
+        })
+
+        res.json({
+            user,
+            token
+        })
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Error en auth Google" });
+    }
+};
+
+
+export const completarPerfil = async (req, res) => {
+    try {
+        const { telefono } = req.body
+        const userId = req.user.id;
+
+        if (!/^\+[1-9]\d{7,14}$/.test(telefono)) {
+            return res.status(400).json({ message: "Telefono inválido" });
+        }
+
+
+
+        await query(
+            `UPDATE usuario 
+             SET telefono = ?, profile_complete = 1 
+             WHERE id_usuario = ?`,
+            [telefono, userId]
+        );
+
+        const [rows] = await query(
+            "SELECT * FROM usuario WHERE id_usuario = ?",
+            [userId]
+        );
+
+        const user = rows[0];
+
+        res.json({
+            user: {
+                id_usuario: user.id_usuario,
+                name: user.name,
+                apellido: user.apellido,
+                email: user.email,
+                telefono: user.telefono,
+                role: user.role,
+                profile_complete: user.profile_complete
+            }
+        });
+
+
+    } catch (error) {
+        res.status(500).json({ message: "Error completando perfil" });
+    }
+}

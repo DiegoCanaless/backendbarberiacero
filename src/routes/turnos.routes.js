@@ -19,7 +19,7 @@ router.post("/",verifyToken, verifyRole(["usuario"]), crearTurno)
 
 // PUT
 router.put("/cancelar/:id",verifyToken, verifyRole(["usuario", "barber"]), cancelarTurno)
-router.put("/finalizar/:id",verifyToken, verifyRole(["barber"]), finalizarTurno)
+router.put("/finalizar/:id",verifyToken, verifyRole(["barber", "admin"]), finalizarTurno)
 
 
 export default router

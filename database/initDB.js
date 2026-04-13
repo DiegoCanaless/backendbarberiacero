@@ -10,12 +10,15 @@ export const initDB = () => {
         CREATE TABLE IF NOT EXISTS usuario (
             id_usuario INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            apellido TEXT NOT NULL,
+            apellido TEXT,
             email TEXT UNIQUE NOT NULL,
-            telefono TEXT NOT NULL,
-            password TEXT NOT NULL,
+            telefono TEXT,
+            password TEXT,
             role TEXT NOT NULL,
             estado TEXT DEFAULT 'activo',
+            provider TEXT DEFAULT 'local',
+            google_id TEXT,
+            profile_complete INTEGER DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     `).run();
@@ -86,7 +89,7 @@ export const initDB = () => {
         )
     `).run();
 
-    console.log("Tablas creadas correctamente");
+    console.log("✅ Tablas creadas correctamente");
 
     // 🌱 SEED USUARIOS
     const userCount = db.prepare("SELECT COUNT(*) as count FROM usuario").get();
@@ -95,12 +98,12 @@ export const initDB = () => {
         console.log("🌱 Insertando usuarios...");
 
         db.prepare(`
-            INSERT INTO usuario (name, apellido, email, telefono, password, role)
+            INSERT INTO usuario (name, apellido, email, telefono, password, role, provider, google_id, profile_complete)
             VALUES 
-            ('Admin', 'Principal', 'admin@barberia.com', '1111111111', '$2b$10$56yAlwXJagwzggF7wkp4JenRr36AVpCA2SGRRevm7z0yqal2R6uvi', 'admin'),
-            ('Juan', 'Corte', 'juan@barberia.com', '2222222222', '123456', 'barber'),
-            ('Pedro', 'Fade', 'pedro@barberia.com', '3333333333', '123456', 'barber'),
-            ('Carlos', 'Cliente', 'carlos@mail.com', '4444444444', '123456', 'usuario')
+            ('Admin', 'Principal', 'admin@barberia.com', '1111111111', '$2b$10$56yAlwXJagwzggF7wkp4JenRr36AVpCA2SGRRevm7z0yqal2R6uvi', 'admin', 'local', NULL, 1),
+            ('Juan', 'Corte', 'juan@barberia.com', '2222222222', '123456', 'barber', 'local', NULL, 1),
+            ('Pedro', 'Fade', 'pedro@barberia.com', '3333333333', '123456', 'barber', 'local', NULL, 1),
+            ('Carlos', 'Cliente', 'carlos@mail.com', '4444444444', '123456', 'usuario', 'local', NULL, 1)
         `).run();
     }
 
