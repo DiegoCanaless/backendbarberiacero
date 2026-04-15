@@ -296,7 +296,6 @@ export const changeStatus = async (req, res) => {
             return res.status(404).json({ message: "Usuario no encontrado" });
         }
 
-        // actualizar estado
         await query(
             "UPDATE usuario SET estado = ? WHERE id_usuario = ?",
             [estado, id]
