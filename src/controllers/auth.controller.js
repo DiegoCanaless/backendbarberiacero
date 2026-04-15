@@ -269,3 +269,54 @@ export const completarPerfil = async (req, res) => {
         res.status(500).json({ message: "Error completando perfil" });
     }
 };
+
+
+export const changeStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { estado } = req.body;
+
+        // validar id
+        if (isNaN(id)) {
+            return res.status(400).json({ message: "ID inválido" });
+        }
+
+        // validar estado
+        if (!["activo", "oculto"].includes(estado)) {
+            return res.status(400).json({ message: "Estado inválido" });
+        }
+
+        // verificar usuario existe
+        const [user] = await query(
+            "SELECT id_usuario FROM usuario WHERE id_usuario = ?",
+            [id]
+        );
+
+        if (user.length === 0) {
+            return res.status(404).json({ message: "Usuario no encontrado" });
+        }
+
+        // actualizar estado
+        await query(
+            "UPDATE usuario SET estado = ? WHERE id_usuario = ?",
+            [estado, id]
+        );
+
+        // si lo ocultás, cancelar turnos
+        if (estado === "oculto") {
+            await query(
+                `UPDATE turnos 
+                 SET estado = 'Cancelado'
+                 WHERE clienteID = ?
+                 AND estado = 'Reservado'`,
+                [id]
+            );
+        }
+
+        res.json({ message: "Estado actualizado correctamente" });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Error al actualizar el estado" });
+    }
+};
