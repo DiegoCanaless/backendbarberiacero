@@ -183,7 +183,7 @@ export const crearTurno = async (req, res) => {
     const horaFin = `${fromMinutes(finMin)}:00`;
 
     // 🔹 Día
-    const dias = ["domingo","lunes","martes","miercoles","jueves","viernes","sabado"];
+    const dias = ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"];
     const dia = dias[new Date(`${fecha}T00:00:00`).getDay()];
 
     // 🔹 Horarios laborales
@@ -320,7 +320,10 @@ export const cancelarTurno = async (req, res) => {
       [id]
     );
 
-    io.emit("turno_cancelado", { id_turno: Number(id) })
+    io.emit("turno_cancelado", {
+      id_turno: Number(id),
+      barbero: { id_usuario: turno.barberID } 
+    })
 
     res.json({ message: "Turno cancelado correctamente" });
 
