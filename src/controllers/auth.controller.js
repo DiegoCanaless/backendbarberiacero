@@ -301,7 +301,6 @@ export const changeStatus = async (req, res) => {
             [estado, id]
         );
 
-        // si lo ocultás, cancelar turnos
         if (estado === "oculto") {
             await query(
                 `UPDATE turnos 

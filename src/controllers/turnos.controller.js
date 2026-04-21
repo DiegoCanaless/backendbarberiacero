@@ -4,6 +4,7 @@ import {
   mapTurnoConBarbero,
   mapTurnoCompleto
 } from "../utils/turno.mapper.js";
+import { io } from "../server.js"
 
 const toMinutes = (timeStr) => {
   const [h, m] = timeStr.slice(0, 5).split(":").map(Number);
@@ -144,8 +145,9 @@ export const crearTurno = async (req, res) => {
   const horarioDB = horario.length === 5 ? `${horario}:00` : horario;
 
   try {
+    // 🔹 Traer servicio
     const [servicio] = await query(
-      `SELECT duracion FROM servicios 
+      `SELECT nombre, duracion FROM servicios 
        WHERE id_servicio = ? AND estado = 'activo'`,
       [servicioID]
     );
@@ -154,6 +156,9 @@ export const crearTurno = async (req, res) => {
       return res.status(404).json({ message: "Servicio no encontrado" });
     }
 
+    const duracion = servicio[0].duracion;
+
+    // 🔹 Validar fecha
     const ahora = new Date();
     const fechaTurno = new Date(`${fecha}T${horarioDB}`);
 
@@ -161,8 +166,7 @@ export const crearTurno = async (req, res) => {
       return res.status(400).json({ message: "No se puede reservar en el pasado" });
     }
 
-    const duracion = servicio[0].duracion;
-
+    // 🔹 Validar barbero-servicio
     const [barberoServicio] = await query(
       `SELECT 1 FROM barbero_servicios
        WHERE barberID = ? AND servicioID = ? AND estado = 'activo'`,
@@ -173,14 +177,16 @@ export const crearTurno = async (req, res) => {
       return res.status(400).json({ message: "Este barbero no realiza ese servicio" });
     }
 
-    // Calcular horaFin en minutos, sin new Date()
+    // 🔹 Calcular horaFin
     const inicioMin = toMinutes(horarioDB);
     const finMin = inicioMin + duracion;
     const horaFin = `${fromMinutes(finMin)}:00`;
 
-    const dias = ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"];
+    // 🔹 Día
+    const dias = ["domingo","lunes","martes","miercoles","jueves","viernes","sabado"];
     const dia = dias[new Date(`${fecha}T00:00:00`).getDay()];
 
+    // 🔹 Horarios laborales
     const [horarios] = await query(
       `SELECT horaInicio, horaFin FROM horariotrabajo
        WHERE barberID = ? AND dia = ? AND estado = 'activo'`,
@@ -191,7 +197,6 @@ export const crearTurno = async (req, res) => {
       return res.status(400).json({ message: "El barbero no trabaja ese día" });
     }
 
-    // Comparar todo en minutos, sin new Date()
     const dentroDeHorario = horarios.some(h => {
       const inicioTurnoMin = toMinutes(horarioDB);
       const finTurnoMin = toMinutes(horaFin);
@@ -202,9 +207,10 @@ export const crearTurno = async (req, res) => {
     });
 
     if (!dentroDeHorario) {
-      return res.status(400).json({ message: "El turno está fuera del horario laboral" });
+      return res.status(400).json({ message: "Fuera del horario laboral" });
     }
 
+    // 🔹 Validar solapamiento
     const [solapado] = await query(
       `SELECT 1 FROM turnos
        WHERE barberID = ?
@@ -216,9 +222,10 @@ export const crearTurno = async (req, res) => {
     );
 
     if (solapado.length > 0) {
-      return res.status(409).json({ message: "Ese horario se superpone con otro turno" });
+      return res.status(409).json({ message: "Horario ocupado" });
     }
 
+    // 🔹 INSERT
     const [result] = await query(
       `INSERT INTO turnos 
        (clienteID, barberID, servicioID, fecha, horario, horaFin, estado)
@@ -226,13 +233,48 @@ export const crearTurno = async (req, res) => {
       [clienteID, barberID, servicioID, fecha, horarioDB, horaFin]
     );
 
-    res.status(201).json({ message: "Turno creado correctamente", id: result.insertId });
+    // 🔥 Traer barbero (SIN JOIN)
+    const [barbero] = await query(
+      `SELECT id_usuario, name, apellido FROM usuario WHERE id_usuario = ?`,
+      [barberID]
+    );
+
+    // 🔥 Objeto FINAL (igual al frontend)
+    const nuevoTurno = {
+      id_turno: result.lastInsertRowid,
+      fecha,
+      horario: horarioDB,
+      horaFin,
+      estado: "Reservado",
+
+      servicio: servicio[0].nombre,
+
+      barbero: {
+        id_usuario: barbero[0]?.id_usuario,
+        name: barbero[0]?.name,
+        apellido: barbero[0]?.apellido
+      },
+
+      clienteID
+    };
+
+
+
+
+    // 🔥 SOCKET (nombre correcto)
+    io.emit("nuevo_turno", nuevoTurno);
+
+    return res.status(201).json({
+      message: "Turno creado correctamente",
+      turno: nuevoTurno
+    });
 
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Error al crear el turno" });
+    console.error("ERROR CREAR TURNO:", error);
+    return res.status(500).json({ message: "Error al crear el turno" });
   }
 };
+
 
 
 /* ============================= */
@@ -278,6 +320,8 @@ export const cancelarTurno = async (req, res) => {
       [id]
     );
 
+    io.emit("turno_cancelado", { id_turno: Number(id) })
+
     res.json({ message: "Turno cancelado correctamente" });
 
   } catch (error) {
@@ -318,6 +362,8 @@ export const finalizarTurno = async (req, res) => {
       `UPDATE turnos SET estado = 'Finalizado' WHERE id_turno = ?`,
       [id]
     );
+
+    io.emit("turno_finalizado", { id_turno: Number(id) })
 
     res.json({ message: "Turno finalizado correctamente" });
 

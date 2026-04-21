@@ -66,9 +66,7 @@ export const initDB = () => {
 
             FOREIGN KEY (clienteID) REFERENCES usuario(id_usuario) ON DELETE CASCADE,
             FOREIGN KEY (barberID) REFERENCES usuario(id_usuario) ON DELETE CASCADE,
-            FOREIGN KEY (servicioID) REFERENCES servicios(id_servicio) ON DELETE CASCADE,
-
-            UNIQUE (barberID, fecha, horario)
+            FOREIGN KEY (servicioID) REFERENCES servicios(id_servicio) ON DELETE CASCADE
         )
     `).run();
 
